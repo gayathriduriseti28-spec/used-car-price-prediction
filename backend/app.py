@@ -32,14 +32,17 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-
     data = request.get_json()
+
+    model_year = int(data["year"])
+    mileage = float(data["mileage"])
+    vehicle_age = 2026 - model_year
 
     input_data = pd.DataFrame([{
         "brand": data["brand"],
         "model": data["model"],
-        "model_year": int(data["year"]),
-        "milage": float(data["mileage"]),
+        "model_year": model_year,
+        "milage": mileage,
         "fuel_type": data["fuelType"],
         "engine": data["engineType"],
         "transmission": data["transmission"],
@@ -50,7 +53,9 @@ def predict():
             if data["accidentHistory"] == "Yes"
             else "None reported"
         ),
-        "clean_title": data["cleanTitle"]
+        "clean_title": data["cleanTitle"],
+        "vehicle_age": vehicle_age,
+        "mileage_per_year": mileage / max(vehicle_age, 1)
     }])
 
     predicted_price = model.predict(input_data)[0]
@@ -58,7 +63,6 @@ def predict():
     return jsonify({
         "predicted_price": round(float(predicted_price), 2)
     })
-
 
 # --------------------------------------------------
 # PRICE DISTRIBUTION
@@ -279,29 +283,25 @@ def recommended_cars():
 # --------------------------------------------------
 # MODEL PERFORMANCE
 # --------------------------------------------------
-
 @app.route("/model-performance", methods=["GET"])
 def model_performance():
-
     results = pd.read_csv(
-        "../ml/saved_model/model_results.csv"
+        "../ml/saved_model/model_results.csv",
+        index_col=0
     )
 
     result = []
 
-    for _, row in results.iterrows():
+    for name, row in results.iterrows():
         result.append({
-            "name": row["Unnamed: 0"],
-            "score": round(float(row["R2"]) * 100, 2)
+            "name": name,
+            "MAE": round(float(row["MAE"]), 2),
+            "RMSE": round(float(row["RMSE"]), 2),
+            "R2": round(float(row["R2"]), 4),
+            "R2_percentage": round(float(row["R2"]) * 100, 2)
         })
 
-    result.sort(
-        key=lambda x: x["score"],
-        reverse=True
-    )
-
     return jsonify(result)
-
 
 # --------------------------------------------------
 # RUN SERVER

@@ -4,13 +4,14 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from sklearn.compose import TransformedTargetRegressor
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 
-from sklearn.linear_model import LinearRegression-
+from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
@@ -33,7 +34,11 @@ MODEL_DIR = "ml/saved_model"
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 df = pd.read_csv(DATA_PATH)
-
+print("Dataset shape:", df.shape)
+print("\nColumn names:", df.columns.tolist())
+print("\nMissing values:\n", df.isnull().sum())
+print("\nPrice summary:\n", df["price"].describe())
+print("\nSample prices:\n", df["price"].head(10))
 print("Dataset loaded successfully")
 print("Shape:", df.shape)
 
@@ -56,6 +61,19 @@ def clean_price(value):
 
 
 df["price"] = df["price"].apply(clean_price)
+print("\nCleaned price summary:")
+print(df["price"].describe())
+
+print("\nHighest 10 prices:")
+print(df.nlargest(10, "price")[["brand", "model", "model_year", "price"]])
+
+print("\nCars priced above $200,000:")
+print(
+    df.loc[df["price"] > 200000,
+           ["brand", "model", "model_year", "price"]]
+    .sort_values("price", ascending=False)
+    .to_string(index=False)
+)
 
 
 # --------------------------------------------------
@@ -83,6 +101,14 @@ def clean_milage(value):
 
 
 df["milage"] = df["milage"].apply(clean_milage)
+print("Duplicate rows:", df.duplicated().sum())
+
+print(
+    "Duplicate brand-model-year combinations:",
+    df.duplicated(
+        subset=["brand", "model", "model_year"]
+    ).sum()
+)
 
 
 # --------------------------------------------------
@@ -100,6 +126,17 @@ df["model_year"] = pd.to_numeric(
 # --------------------------------------------------
 
 df = df.dropna(subset=["price"])
+CURRENT_YEAR = 2026
+
+df["vehicle_age"] = CURRENT_YEAR - df["model_year"]
+
+df["mileage_per_year"] = (
+    df["milage"] / df["vehicle_age"].clip(lower=1)
+)
+print("Unique brands:", df["brand"].nunique())
+print("Unique models:", df["model"].nunique())
+print("Unique model years:", df["model_year"].nunique())
+print("Price range:", df["price"].min(), "-", df["price"].max())
 
 print("Rows after cleaning:", len(df))
 
@@ -120,6 +157,8 @@ features = [
     "int_col",
     "accident",
     "clean_title",
+    "vehicle_age",
+    "mileage_per_year",
 ]
 
 X = df[features]
@@ -148,6 +187,8 @@ print("Testing samples:", len(X_test))
 numeric_features = [
     "model_year",
     "milage",
+    "vehicle_age",
+    "mileage_per_year",
 ]
 
 categorical_features = [
@@ -343,7 +384,7 @@ print("RMSE:", round(tuned_rmse, 2))
 print("R2  :", round(tuned_r2, 4))
 
 print("\nBest Parameters:")
-print(random_search.best_params__)
+print(random_search.best_params_)
 
 # --------------------------------------------------
 # 11. MODEL COMPARISON
@@ -353,6 +394,40 @@ results_df = pd.DataFrame(results).T
 
 print("\n================ MODEL COMPARISON ================")
 print(results_df)
+
+from sklearn.base import clone
+
+print("\n===== LOG-TRANSFORMED RANDOM FOREST =====")
+
+log_rf = Pipeline([
+    ("preprocessor", clone(preprocessor)),
+    ("model", RandomForestRegressor(
+        n_estimators=200,
+        random_state=42,
+        n_jobs=-1
+    ))
+])
+
+log_model = TransformedTargetRegressor(
+    regressor=log_rf,
+    func=np.log1p,
+    inverse_func=np.expm1
+)
+
+log_model.fit(X_train, y_train)
+log_predictions = log_model.predict(X_test)
+
+print("MAE:", round(mean_absolute_error(
+    y_test, log_predictions
+), 2))
+
+print("RMSE:", round(np.sqrt(mean_squared_error(
+    y_test, log_predictions
+)), 2))
+
+print("R2:", round(r2_score(
+    y_test, log_predictions
+), 4))
 
 
 # --------------------------------------------------
