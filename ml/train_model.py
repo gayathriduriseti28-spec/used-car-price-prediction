@@ -10,6 +10,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
+import matplotlib.pyplot as plt
 
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
@@ -268,49 +269,36 @@ if XGBOOST_AVAILABLE:
 # --------------------------------------------------
 # 10. TRAIN MODELS
 # --------------------------------------------------
-
 results = {}
-
 trained_pipelines = {}
-
 for name, model in models.items():
-
     print("\nTraining:", name)
-
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("model", model),
     ])
-
     pipeline.fit(X_train, y_train)
-
     predictions = pipeline.predict(X_test)
-
     mae = mean_absolute_error(
         y_test,
         predictions
     )
-
     rmse = np.sqrt(
         mean_squared_error(
             y_test,
             predictions
         )
     )
-
     r2 = r2_score(
         y_test,
         predictions
     )
-
     results[name] = {
         "MAE": mae,
         "RMSE": rmse,
         "R2": r2,
     }
-
     trained_pipelines[name] = pipeline
-
     print("MAE :", round(mae, 2))
     print("RMSE:", round(rmse, 2))
     print("R2  :", round(r2, 4))
@@ -440,6 +428,44 @@ best_pipeline = trained_pipelines[best_model_name]
 
 print("\nSelected model:", best_model_name)
 
+# Actual vs Predicted Price Graph
+actual_prices = y_test
+predicted_prices = best_pipeline.predict(X_test)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(actual_prices, predicted_prices, alpha=0.5)
+plt.plot(
+    [actual_prices.min(), actual_prices.max()],
+    [actual_prices.min(), actual_prices.max()],
+    "r--"
+)
+plt.xlabel("Actual Price")
+plt.ylabel("Predicted Price")
+plt.title("Actual vs Predicted Car Prices")
+plt.tight_layout()
+
+graph_path = os.path.join(MODEL_DIR, "actual_vs_predicted.png")
+plt.savefig(graph_path, dpi=300)
+plt.close()
+
+print("Actual vs Predicted graph saved:", graph_path)
+
+# Residual Error Plot
+residuals = actual_prices - predicted_prices
+
+plt.figure(figsize=(8, 6))
+plt.scatter(predicted_prices, residuals, alpha=0.5)
+plt.axhline(y=0, color="red", linestyle="--")
+plt.xlabel("Predicted Price")
+plt.ylabel("Residual Error")
+plt.title("Residual Error Plot")
+plt.tight_layout()
+
+residual_path = os.path.join(MODEL_DIR, "residual_error.png")
+plt.savefig(residual_path, dpi=300)
+plt.close()
+
+print("Residual Error graph saved:", residual_path)
 
 # --------------------------------------------------
 # 13. SAVE BEST MODEL

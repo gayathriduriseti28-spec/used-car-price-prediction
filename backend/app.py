@@ -29,15 +29,12 @@ def home():
 # --------------------------------------------------
 # PREDICT PRICE
 # --------------------------------------------------
-
 @app.route("/predict", methods=["POST"])
 def predict():
     data = request.get_json()
-
     model_year = int(data["year"])
     mileage = float(data["mileage"])
     vehicle_age = 2026 - model_year
-
     input_data = pd.DataFrame([{
         "brand": data["brand"],
         "model": data["model"],
@@ -57,9 +54,7 @@ def predict():
         "vehicle_age": vehicle_age,
         "mileage_per_year": mileage / max(vehicle_age, 1)
     }])
-
     predicted_price = model.predict(input_data)[0]
-
     return jsonify({
         "predicted_price": round(float(predicted_price), 2)
     })
